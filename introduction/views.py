@@ -1,4 +1,6 @@
 import base64
+from ast import literal_eval
+from django.conf import settings
 import datetime
 import hashlib
 import json
@@ -441,7 +443,6 @@ def cmd_lab(request):
             return render(request, 'Lab/CMD/cmd_lab.html')
     else:
         return redirect('login')
-
 @csrf_exempt
 def cmd_lab2(request):
     if request.user.is_authenticated:
@@ -450,7 +451,8 @@ def cmd_lab2(request):
             
             print(val)
             try:
-                output = eval(val)
+                # Safely evaluate the expression using literal_eval
+                output = literal_eval(val)
             except:
                 output = "Something went wrong"
                 return render(request,'Lab/CMD/cmd_lab2.html',{"output":output})
@@ -460,6 +462,7 @@ def cmd_lab2(request):
             return render(request, 'Lab/CMD/cmd_lab2.html')
     else:
         return redirect('login')
+
 
 #******************************************Broken Authentication**************************************************#
 
@@ -550,7 +553,7 @@ def a9_lab(request):
             try :
                 file=request.FILES["file"]
                 try :
-                    data = yaml.load(file,yaml.Loader)
+                    data = yaml.safe_load(file)
                     
                     return render(request,"Lab/A9/a9_lab.html",{"data":data})
                 except:
@@ -560,6 +563,7 @@ def a9_lab(request):
                 return render(request, "Lab/A9/a9_lab.html", {"data":"Please Upload a Yaml file."})
     else:
         return redirect('login')
+
 def get_version(request):
       return render(request,"Lab/A9/a9_lab.html",{"version":"pyyaml v5.1"})
 
@@ -843,7 +847,6 @@ def injection(request):
     
     return render(request,"Lab_2021/A3_Injection/injection.html")
 
-
 @csrf_exempt
 def injection_sql_lab(request):
     if request.user.is_authenticated:
@@ -854,23 +857,36 @@ def injection_sql_lab(request):
         print(password)
 
         if name:
-            sql_query = "SELECT * FROM introduction_sql_lab_table WHERE id='"+name+"'AND password='"+password+"'"
+            # Use parameterized queries to prevent SQL injection
+            sql_query = "SELECT * FROM introduction_sql_lab_table WHERE id=%s AND password=%s"
+            sql_params = [name, password]
 
-            sql_instance = sql_lab_table(id="admin", password="65079b006e85a7e798abecb99e47c154")
+            # Load credentials from environment variables or a secure configuration file
+            admin_password = os.environ.get('ADMIN_PASSWORD', settings.SECRET_ADMIN_PASSWORD)
+            jack_password = os.environ.get('JACK_PASSWORD', settings.SECRET_JACK_PASSWORD)
+            slinky_password = os.environ.get('SLINKY_PASSWORD', settings.SECRET_SLINKY_PASSWORD)
+            bloke_password = os.environ.get('BLOKE_PASSWORD', settings.SECRET_BLOKE_PASSWORD)
+
+            # Create instances without hardcoded credentials
+            sql_instance = sql_lab_table(id="admin", password=admin_password)
             sql_instance.save()
-            sql_instance = sql_lab_table(id="jack", password="jack")
+            sql_instance = sql_lab_table(id="jack", password=jack_password)
             sql_instance.save()
-            sql_instance = sql_lab_table(id="slinky", password="b4f945433ea4c369c12741f62a23ccc0")
+            sql_instance = sql_lab_table(id="slinky", password=slinky_password)
             sql_instance.save()
-            sql_instance = sql_lab_table(id="bloke", password="f8d1ce191319ea8f4d1d26e65e130dd5")
+            sql_instance = sql_lab_table(id="bloke", password=bloke_password)
             sql_instance.save()
 
-            print(sql_query)
+            print(sql_query % (name, password))  # For debugging purposes, avoid logging sensitive information in production
 
             try:
-                user = sql_lab_table.objects.raw(sql_query)
-                user = user[0].id
-                print(user)
+                # Use the ORM's filter method to safely execute the query
+                user = sql_lab_table.objects.filter(id=name, password=password).first()
+                if user:
+                    user_id = user.id
+                    print(user_id)
+                else:
+                    user_id = None
 
             except:
                 return render(
@@ -878,18 +894,18 @@ def injection_sql_lab(request):
                     'Lab_2021/A3_Injection/sql_lab.html',
                     {
                         "wrongpass":password,
-                        "sql_error":sql_query
+                        "sql_error":sql_query % (name, password)
                     })
 
-            if user:
-                return render(request, 'Lab_2021/A3_Injection/sql_lab.html',{"user1":user})
+            if user_id:
+                return render(request, 'Lab_2021/A3_Injection/sql_lab.html',{"user1":user_id})
             else:
                 return render(
                     request, 
                     'Lab_2021/A3_Injection/sql_lab.html',
                     {
                         "wrongpass":password,
-                        "sql_error":sql_query
+                        "sql_error":sql_query % (name, password)
                     })
         else:
             return render(request, 'Lab_2021/A3_Injection/sql_lab.html')
@@ -910,16 +926,19 @@ def ssrf(request):
 
 def ssrf_lab(request):
     if request.user.is_authenticated:
-        if request.method=="GET":
-            return render(request,"Lab/ssrf/ssrf_lab.html",{"blog":"Read Blog About SSRF"})
+        if request.method == "GET":
+            return render(request, "Lab/ssrf/ssrf_lab.html", {"blog": "Read Blog About SSRF"})
         else:
-            file=request.POST["blog"]
-            try :
+            file = request.POST["blog"]
+            try:
                 dirname = os.path.dirname(__file__)
+                # Ensure the file is within the intended directory
+                if os.path.commonprefix([os.path.realpath(os.path.join(dirname, file)), dirname]) != dirname:
+                    raise ValueError("Unauthorized access attempt")
                 filename = os.path.join(dirname, file)
-                file = open(filename,"r")
-                data = file.read()
-                return render(request,"Lab/ssrf/ssrf_lab.html",{"blog":data})
+                with open(filename, "r") as file:
+                    data = file.read()
+                return render(request, "Lab/ssrf/ssrf_lab.html", {"blog": data})
             except:
                 return render(request, "Lab/ssrf/ssrf_lab.html", {"blog": "No blog found"})
     else:
@@ -984,13 +1003,15 @@ def ssti_lab(request):
             new_blog = Blogs.objects.create(author = request.user, blog_id = id)
             new_blog.save() 
             dirname = os.path.dirname(__file__)
-            filename = os.path.join(dirname, f"templates/Lab_2021/A3_Injection/Blogs/{id}.html")
+            safe_id = os.path.basename(id)  # Ensure the id is just a filename, not a path
+            filename = os.path.join(dirname, "templates", "Lab_2021", "A3_Injection", "Blogs", f"{safe_id}.html")
             file = open(filename, "w+") 
             file.write(blog)
             file.close()
             return redirect(f'blog/{id}')
     else:
         return redirect('login')
+
 
 
 def ssti_view_blog(request,blog_id):

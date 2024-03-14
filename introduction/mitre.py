@@ -1,4 +1,9 @@
 import datetime
+import hashlib
+from .decorators import authentication_decorator
+import ast
+import operator as op
+import shlex
 import re
 import subprocess
 from hashlib import md5
@@ -158,7 +163,7 @@ def csrf_lab_login(request):
     elif request.method == 'POST':
         password = request.POST.get('password')
         username = request.POST.get('username')
-        password = md5(password.encode()).hexdigest()
+        password = hashlib.sha256(password.encode()).hexdigest()
         User = CSRF_user_tbl.objects.filter(username=username, password=password)
         if User:
             payload ={
@@ -209,14 +214,38 @@ def csrf_transfer_monei_api(request,recipent,amount):
     else:
         return redirect ('/mitre/9/lab/transaction')
 
-
 # @authentication_decorator
 @csrf_exempt
 def mitre_lab_25_api(request):
     if request.method == "POST":
         expression = request.POST.get('expression')
-        result = eval(expression)
-        return JsonResponse({'result': result})
+        
+        # Supported operators
+        operators = {ast.Add: op.add, ast.Sub: op.sub, ast.Mult: op.mul,
+                     ast.Div: op.truediv, ast.Pow: op.pow, ast.BitXor: op.xor,
+                     ast.USub: op.neg}
+
+        def eval_expr(expr):
+            """
+            Safely evaluate an arithmetic expression using ast module
+            """
+            def _eval(node):
+                if isinstance(node, ast.Num):  # <number>
+                    return node.n
+                elif isinstance(node, ast.BinOp):  # <left> <operator> <right>
+                    return operators[type(node.op)](_eval(node.left), _eval(node.right))
+                elif isinstance(node, ast.UnaryOp):  # <operator> <operand> e.g., -1
+                    return operators[type(node.op)](_eval(node.operand))
+                else:
+                    raise TypeError("Unsupported type: {}".format(type(node)))
+
+            return _eval(ast.parse(expr, mode='eval').body)
+
+        try:
+            result = eval_expr(expression)
+            return JsonResponse({'result': result})
+        except Exception as e:
+            return JsonResponse({'error': str(e)})
     else:
         return redirect('/mitre/25/lab/')
 
@@ -230,9 +259,9 @@ def mitre_lab_17(request):
     return render(request, 'mitre/mitre_lab_17.html')
 
 def command_out(command):
-    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    safe_command = shlex.split(command)
+    process = subprocess.Popen(safe_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     return process.communicate()
-    
 
 @csrf_exempt
 def mitre_lab_17_api(request):

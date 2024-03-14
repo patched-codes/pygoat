@@ -5,7 +5,6 @@ import uuid
 from .models import *
 
 
-# import re
 def ssrf_code_converter(code):
     list_input = code.split("\n")
     del_l = []
@@ -31,13 +30,14 @@ def ssrf_code_converter(code):
     output_Code = "\n".join(list_output)
 
     dirname = os.path.dirname(__file__)
-    filename = os.path.join(dirname, "playground/ssrf/main.py")
-    f = open(filename,"w")
+    safe_path = os.path.normpath(os.path.join(dirname, "playground/ssrf/main.py"))
+    if not safe_path.startswith(os.path.abspath(dirname)):
+        raise ValueError("Unauthorized file access attempt detected!")
+    f = open(safe_path,"w")
     f.write(output_Code)
     f.close()
     return 1
 
-# ssrf_code_converter(input_code)
 def ssrf_html_input_extractor(code):
     params = []
     list_input = code.split("\n")
