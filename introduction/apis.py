@@ -1,4 +1,5 @@
 import time
+import os
 
 import requests
 from django.contrib.auth import authenticate, login
@@ -64,8 +65,12 @@ def log_function_checker(request):
         log_code = request.POST.get('log_code')
         api_code = request.POST.get('api_code')
         dirname = os.path.dirname(__file__)
-        log_filename = os.path.join(dirname, "playground/A9/main.py")
-        api_filename = os.path.join(dirname, "playground/A9/api.py")
+        log_filename = os.path.abspath(os.path.join(dirname, "playground/A9/main.py"))
+        api_filename = os.path.abspath(os.path.join(dirname, "playground/A9/api.py"))
+        if not log_filename.startswith(os.path.abspath(dirname)):
+            raise ValueError("Invalid path for log file")
+        if not api_filename.startswith(os.path.abspath(dirname)):
+            raise ValueError("Invalid path for API file")
         f = open(log_filename,"w")
         f.write(log_code)
         f.close()
@@ -88,6 +93,7 @@ def log_function_checker(request):
         return JsonResponse({"message":"success", "logs": lines},status = 200)
     else:
         return JsonResponse({"message":"method not allowed"},status = 405)
+
 
 #a7 codechecking api
 @csrf_exempt
@@ -128,11 +134,14 @@ def A6_disscussion_api_2(request):
         return JsonResponse({"message":"method not allowed"},status = 405)
     try:
         code = request.POST.get('code')
+        if code is None:
+            raise ValueError("No code provided")
         dirname = os.path.dirname(__file__)
-        filename = os.path.join(dirname, "playground/A6/utility.py")
-        f = open(filename,"w")
-        f.write(code)
-        f.close()
-    except:
-        return JsonResponse({"message":"missing code"},status = 400)
-    return JsonResponse({"message":"success"},status = 200)
+        safe_path = os.path.normpath(os.path.join(dirname, "playground/A6/utility.py"))
+        if not safe_path.startswith(os.path.abspath(dirname)):
+            raise ValueError("Unauthorized file access")
+        with open(safe_path, "w") as f:
+            f.write(code)
+    except Exception as e:
+        return JsonResponse({"message": str(e)}, status=400)
+    return JsonResponse({"message":"success"}, status=200)
