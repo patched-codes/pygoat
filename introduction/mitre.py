@@ -1,4 +1,7 @@
 import datetime
+import operator as op
+import ast
+import shlex
 import re
 import subprocess
 from hashlib import md5
@@ -158,7 +161,7 @@ def csrf_lab_login(request):
     elif request.method == 'POST':
         password = request.POST.get('password')
         username = request.POST.get('username')
-        password = md5(password.encode()).hexdigest()
+        password = hashlib.sha256(password.encode()).hexdigest()
         User = CSRF_user_tbl.objects.filter(username=username, password=password)
         if User:
             payload ={
@@ -172,6 +175,7 @@ def csrf_lab_login(request):
             return response
         else :
             return redirect('/mitre/9/lab/login')
+
 
 @authentication_decorator
 @csrf_exempt
@@ -209,16 +213,46 @@ def csrf_transfer_monei_api(request,recipent,amount):
     else:
         return redirect ('/mitre/9/lab/transaction')
 
-
 # @authentication_decorator
 @csrf_exempt
 def mitre_lab_25_api(request):
     if request.method == "POST":
         expression = request.POST.get('expression')
-        result = eval(expression)
+        # Safely evaluate the expression
+        result = safe_eval(expression)
         return JsonResponse({'result': result})
     else:
         return redirect('/mitre/25/lab/')
+
+# Supported operators
+allowed_operators = {
+    ast.Add: op.add, ast.Sub: op.sub, ast.Mult: op.mul,
+    ast.Div: op.truediv, ast.Pow: op.pow, ast.BitXor: op.xor,
+    ast.USub: op.neg
+}
+
+def safe_eval(expr):
+    """
+    Safely evaluate an arithmetic expression using ast module.
+    """
+    try:
+        return eval_(ast.parse(expr, mode='eval').body)
+    except (SyntaxError, ValueError):
+        return "Invalid expression"
+
+def eval_(node):
+    if isinstance(node, ast.Num):  # <number>
+        return node.n
+    elif isinstance(node, ast.BinOp):  # <left> <operator> <right>
+        if type(node.op) not in allowed_operators:
+            raise ValueError("Unsupported operator")
+        return allowed_operators[type(node.op)](eval_(node.left), eval_(node.right))
+    elif isinstance(node, ast.UnaryOp):  # <operator> <operand> e.g., -1
+        if type(node.op) not in allowed_operators:
+            raise ValueError("Unsupported operator")
+        return allowed_operators[type(node.op)](eval_(node.operand))
+    else:
+        raise TypeError("Unsupported expression")
 
 
 @authentication_decorator
@@ -230,9 +264,9 @@ def mitre_lab_17(request):
     return render(request, 'mitre/mitre_lab_17.html')
 
 def command_out(command):
-    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    safe_command = shlex.split(command)
+    process = subprocess.Popen(safe_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     return process.communicate()
-    
 
 @csrf_exempt
 def mitre_lab_17_api(request):
