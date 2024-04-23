@@ -12,14 +12,6 @@ from introduction.playground.ssrf import main
 
 from .utility import *
 from .views import authentication_decorator
-
-
-# steps --> 
-# 1. covert input code to corrosponding code and write in file
-# 2. extract inputs form 2nd code 
-# 3. Run the code 
-# 4. get the result
-@csrf_exempt
 def ssrf_code_checker(request):
     if request.user.is_authenticated:
         if request.method == 'POST':
@@ -52,15 +44,12 @@ def ssrf_code_checker(request):
             return JsonResponse({'message':'method not allowed'},status = 405)
     else:
         return JsonResponse({'message':'UnAuthenticated User'},status = 401)
-
-# Insufficient Logging & Monitoring
-
-
-@csrf_exempt
-# @authentication_decorator
 def log_function_checker(request):
+    
     if request.method == 'POST':
         csrf_token = request.POST.get("csrfmiddlewaretoken")
+        if csrf_token != request.session.get('csrf_token'):
+            return JsonResponse({"message":"CSRF token missing or incorrect"},status = 403)
         log_code = request.POST.get('log_code')
         api_code = request.POST.get('api_code')
         dirname = os.path.dirname(__file__)
@@ -89,8 +78,6 @@ def log_function_checker(request):
     else:
         return JsonResponse({"message":"method not allowed"},status = 405)
 
-#a7 codechecking api
-@csrf_exempt
 def A7_disscussion_api(request):
     if request.method != 'POST':
         return JsonResponse({"message":"method not allowed"},status = 405)
@@ -108,31 +95,26 @@ def A7_disscussion_api(request):
 
     return JsonResponse({"message":"failure"},status = 400)
 
-#a6 codechecking api
-@csrf_exempt
-def A6_disscussion_api(request):
-    test_bench = ["Pillow==8.0.0","PyJWT==2.4.0","requests==2.28.0","Django==4.0.4"]
+try:
+    result = check_vuln(test_bench)
+    from django.views.decorators.csrf import csrf_protect
     
-    try:
-        result = check_vuln(test_bench)
-        print(len(result))
-        if result:
-            return JsonResponse({"message":"success","vulns":result},status = 200)
-        return JsonResponse({"message":"failure"},status = 400)
-    except Exception as e:
-        return JsonResponse({"message":"failure"},status = 400)
+    @csrf_protect
+    def A6_disscussion_api(request):
+        test_bench = ["Pillow==8.0.0","PyJWT==2.4.0","requests==2.28.0","Django==4.0.4"]
 
-@csrf_exempt
-def A6_disscussion_api_2(request):
-    if request.method != 'POST':
-        return JsonResponse({"message":"method not allowed"},status = 405)
-    try:
-        code = request.POST.get('code')
-        dirname = os.path.dirname(__file__)
-        filename = os.path.join(dirname, "playground/A6/utility.py")
-        f = open(filename,"w")
-        f.write(code)
-        f.close()
-    except:
-        return JsonResponse({"message":"missing code"},status = 400)
-    return JsonResponse({"message":"success"},status = 200)
+        try:
+            result = check_vuln(test_bench)
+            print(len(result))
+            if result:
+                return JsonResponse({"message":"success","vulns":result},status = 200)
+            return JsonResponse({"message":"failure"},status = 400)
+        except Exception as e:
+            return JsonResponse({"message":"failure"},status = 400)
+            filename = os.path.join(dirname, "playground/A6/utility.py")
+    f = open(filename,"w")
+    f.write(code)
+    f.close()
+except:
+    return JsonResponse({"message":"missing code"},status = 400)
+return JsonResponse({"message":"success"},status = 200)
