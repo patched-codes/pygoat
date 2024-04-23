@@ -150,29 +150,28 @@ def mitre_top24(request):
 def mitre_top25(request):
     if request.method == 'GET':
         return render(request, 'mitre/mitre_top25.html')
-
-@authentication_decorator
-def csrf_lab_login(request):
-    if request.method == 'GET':
-        return render(request, 'mitre/csrf_lab_login.html')
-    elif request.method == 'POST':
-        password = request.POST.get('password')
-        username = request.POST.get('username')
-        password = md5(password.encode()).hexdigest()
-        User = CSRF_user_tbl.objects.filter(username=username, password=password)
-        if User:
-            payload ={
-                'username': username,
-                'exp': datetime.datetime.utcnow() + datetime.timedelta(seconds=300),
-                'iat': datetime.datetime.utcnow()
-            }
-            cookie = jwt.encode(payload, 'csrf_vulneribility', algorithm='HS256')
-            response = redirect("/mitre/9/lab/transaction")
-            response.set_cookie('auth_cookiee', cookie)
-            return response
-        else :
-            return redirect('/mitre/9/lab/login')
-
+    @authentication_decorator
+    def csrf_lab_login(request):
+        if request.method == 'GET':
+            return render(request, 'mitre/csrf_lab_login.html')
+        elif request.method == 'POST':
+            password = request.POST.get('password')
+            username = request.POST.get('username')
+            password = hashlib.sha256(password.encode()).hexdigest()
+            User = CSRF_user_tbl.objects.filter(username=username, password=password)
+            if User:
+                payload ={
+                    'username': username,
+                    'exp': datetime.datetime.utcnow() + datetime.timedelta(seconds=300),
+                    'iat': datetime.datetime.utcnow()
+                }
+                cookie = jwt.encode(payload, 'csrf_vulneribility', algorithm='HS256')
+                response = redirect("/mitre/9/lab/transaction")
+                response.set_cookie('auth_cookiee', cookie, secure=True, httponly=True, samesite='Lax')
+                return response
+            else :
+                return redirect('/mitre/9/lab/login')
+                return redirect('/mitre/9/lab/login')
 @authentication_decorator
 @csrf_exempt
 def csrf_transfer_monei(request):
@@ -209,19 +208,19 @@ def csrf_transfer_monei_api(request,recipent,amount):
     else:
         return redirect ('/mitre/9/lab/transaction')
 
-
 # @authentication_decorator
 @csrf_exempt
 def mitre_lab_25_api(request):
     if request.method == "POST":
         expression = request.POST.get('expression')
-        result = eval(expression)
+        if expression.isdigit():
+            result = int(expression)
+        else:
+            result = "Invalid input"
         return JsonResponse({'result': result})
     else:
         return redirect('/mitre/25/lab/')
 
-
-@authentication_decorator
 def mitre_lab_25(request):
     return render(request, 'mitre/mitre_lab_25.html')
 
@@ -234,7 +233,6 @@ def command_out(command):
     return process.communicate()
     
 
-@csrf_exempt
 def mitre_lab_17_api(request):
     if request.method == "POST":
         ip = request.POST.get('ip')
