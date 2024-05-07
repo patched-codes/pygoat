@@ -12,14 +12,6 @@ from introduction.playground.ssrf import main
 
 from .utility import *
 from .views import authentication_decorator
-
-
-# steps --> 
-# 1. covert input code to corrosponding code and write in file
-# 2. extract inputs form 2nd code 
-# 3. Run the code 
-# 4. get the result
-@csrf_exempt
 def ssrf_code_checker(request):
     if request.user.is_authenticated:
         if request.method == 'POST':
@@ -52,46 +44,47 @@ def ssrf_code_checker(request):
             return JsonResponse({'message':'method not allowed'},status = 405)
     else:
         return JsonResponse({'message':'UnAuthenticated User'},status = 401)
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+import os
+import requests
 
-# Insufficient Logging & Monitoring
-
-
-@csrf_exempt
-# @authentication_decorator
+@ csrf_exempt
 def log_function_checker(request):
     if request.method == 'POST':
-        csrf_token = request.POST.get("csrfmiddlewaretoken")
+        csrftoken = request.POST.get('csrfmiddlewaretoken')
         log_code = request.POST.get('log_code')
         api_code = request.POST.get('api_code')
-        dirname = os.path.dirname(__file__)
-        log_filename = os.path.join(dirname, "playground/A9/main.py")
-        api_filename = os.path.join(dirname, "playground/A9/api.py")
-        f = open(log_filename,"w")
+        dir_path = os.path.dirname(__file__)
+        log_filename = os.path.join(dir_path, "playground/A9/main.py").replace('\\', '/')
+        api_filename = os.path.join(dir_path, "playground/A9/api.py").replace('\\', '/')
+        log_code = log_code.replace('..', '').replace('\\', '/')
+        api_code = api_code.replace('..', '').replace('\\', '/')
+        f = open(log_filename, "w", encoding='utf-8', errors='ignore')
         f.write(log_code)
         f.close()
-        f = open(api_filename,"w")
+        f = open(api_filename, "w", encoding='utf-8', errors='ignore')
         f.write(api_code)
         f.close()
-        # Clearing the log file before starting the test
         f = open('test.log', 'w')
         f.write("")
         f.close()
         url = "http://127.0.0.1:8000/2021/discussion/A9/target"
-        payload={'csrfmiddlewaretoken': csrf_token }
+        payload={'csrfmiddlewaretoken': csrftoken }
         requests.request("GET", url)
-        requests.request("POST", url)
+        requests.request("POST", url, data=payload)
         requests.request("PATCH", url, data=payload)
-        requests.request("DELETE", url)
+        requests.request("DELETE", url, data=payload)
         f = open('test.log', 'r')
         lines = f.readlines()
         f.close()
         return JsonResponse({"message":"success", "logs": lines},status = 200)
     else:
         return JsonResponse({"message":"method not allowed"},status = 405)
+from django.views.decorators.csrf import ensure_csrf_cookie
 
-#a7 codechecking api
-@csrf_exempt
-def A7_disscussion_api(request):
+@a7_codechecking_api_view
+def A7_discussion_api(request):
     if request.method != 'POST':
         return JsonResponse({"message":"method not allowed"},status = 405)
 
@@ -108,8 +101,6 @@ def A7_disscussion_api(request):
 
     return JsonResponse({"message":"failure"},status = 400)
 
-#a6 codechecking api
-@csrf_exempt
 def A6_disscussion_api(request):
     test_bench = ["Pillow==8.0.0","PyJWT==2.4.0","requests==2.28.0","Django==4.0.4"]
     
@@ -121,18 +112,19 @@ def A6_disscussion_api(request):
         return JsonResponse({"message":"failure"},status = 400)
     except Exception as e:
         return JsonResponse({"message":"failure"},status = 400)
+from django.http import JsonResponse
+import os
 
-@csrf_exempt
 def A6_disscussion_api_2(request):
     if request.method != 'POST':
         return JsonResponse({"message":"method not allowed"},status = 405)
     try:
         code = request.POST.get('code')
+        code = escape(code) # sanitize the code to prevent malicious data injection
         dirname = os.path.dirname(__file__)
         filename = os.path.join(dirname, "playground/A6/utility.py")
-        f = open(filename,"w")
-        f.write(code)
-        f.close()
+        with open(filename,"w") as f:
+            f.write(code)
     except:
         return JsonResponse({"message":"missing code"},status = 400)
     return JsonResponse({"message":"success"},status = 200)
