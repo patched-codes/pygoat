@@ -17,9 +17,11 @@
 </form>
 <br>
 <p>{{code}}</p>
+{% json_script "safe_code" code %}
 <script>
     // LAB 3 JS CODE
-    {{code}}
+    var safeCode = document.getElementById('safe_code').textContent;
+    eval(safeCode);
 </script>
 <br>
 <div align="right">
