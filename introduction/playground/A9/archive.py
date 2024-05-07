@@ -1,10 +1,7 @@
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-
 from .main import Log
 
 
-@csrf_exempt
 def log_function_target(request):
     L = Log(request)
     if request.method == "GET":
@@ -33,12 +30,6 @@ def log_function_target(request):
     return JsonResponse({"message":"method not allowed"},status = 403)
 
 
-# ======================================
-
-import datetime
-
-
-# f = open('test.log', 'a') --> use this file to log
 class Log:
     def __init__(self,request):
         self.request = request
