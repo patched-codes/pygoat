@@ -128,7 +128,7 @@ def ssrf_lab(request):
         <button type="submit" class="btn btn-info"> Blog1 </button>
     </form>
     <form method="post" action="/ssrf_lab">
-        {&#37; csrf_token &#37;}
+        {% csrf_token %}
         <input type="hidden" name="blog" value="templates/Lab/ssrf/blogs/blog2.txt">
         <button type="submit" class="btn btn-info"> Blog2 </button>
     </form>
@@ -138,7 +138,7 @@ def ssrf_lab(request):
         <button type="submit" class="btn btn-info"> Blog3 </button>
     </form>
     <form method="post" action="/ssrf_lab">
-        {&#37; csrf_token &#37;}
+        {% csrf_token %}
         <input type="hidden" name="blog" value="templates/Lab/ssrf/blogs/blog4.txt">
         <button type="submit" class="btn btn-info"> Blog4 </button>
     </form>

@@ -6,7 +6,8 @@
 <div class="jumbotron">
     <div class="container">
         <h5 align="center">Login Through Otp</h5><br>
-        <form method="get" action="/otp">
+        <form method="post" action="/otp">
+            {% csrf_token %}
             <input name="email" type="email" placeholder="yourid@mail.com">
             <button class="btn btn-info" type="submit"> Send OTP</button>
 
@@ -16,6 +17,7 @@
 </div>
 <div class="container">
     <form method="post" action="/otp">
+        {% csrf_token %}
         <label for='enter'>Enter Your OTP:</label>
         <input id="enter" type="number" maxlength="3" name="otp"><br><br>
         <button class="btn btn-info" type="submit">Log in</button>
