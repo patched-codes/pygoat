@@ -1,16 +1,19 @@
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect
+from django.middleware.csrf import CsrfViewMiddleware
 
 from .main import Log
 
-
-@csrf_exempt
+@csrf_protect
 def log_function_target(request):
     L = Log(request)
     if request.method == "GET":
         L.info("GET request")
         return JsonResponse({"message":"normal get request", "method":"get"},status = 200)
     if request.method == "POST":
+        csrf_token =(CsrfViewMiddleware().get_token(request))
+        if csrf_token != request.POST.get('csrfmiddlewaretoken'):
+            return JsonResponse({"message":"CSRF token is invalid"},status = 403)
         username = request.POST['username']
         password = request.POST['password']
         L.info(f"POST request with username {username} and password {password}")
