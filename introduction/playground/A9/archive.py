@@ -1,11 +1,13 @@
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect
+from django.middleware.csrf import get_token
 
 from .main import Log
 
-
-@csrf_exempt
+@csrf_protect
 def log_function_target(request):
+    if 'csrftoken' not in request cookies:
+        get_token(request)
     L = Log(request)
     if request.method == "GET":
         L.info("GET request")

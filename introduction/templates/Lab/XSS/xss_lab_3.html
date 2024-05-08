@@ -19,7 +19,8 @@
 <p>{{code}}</p>
 <script>
     // LAB 3 JS CODE
-    {{code}}
+    {% json_script "code" %}
+    var code = {{ code|json_script }};
 </script>
 <br>
 <div align="right">
