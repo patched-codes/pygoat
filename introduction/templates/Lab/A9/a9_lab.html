@@ -1,5 +1,6 @@
 {% extends "introduction/base.html" %}
 {% load static %}
+{% csrf_token %}
 {% block content %}
 {% block title %}
 <title>A9</title>
@@ -8,6 +9,7 @@
 <div class="jumbotron">
     <h4 style="text-align:center"> Yaml To Json Converter</h4>
     <form enctype="multipart/form-data" method="post" action="/a9_lab">
+        {% csrf_token %}
         <input type="file" name="file"><br>
         <br>
         <button class="btn btn-info" type="submit">Upload</button>
