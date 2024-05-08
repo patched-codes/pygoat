@@ -35,11 +35,14 @@ event3 = function(){
         let data = JSON.parse(result);  // parse JSON string into object
         console.log(data.logs);
         document.getElementById("a9_d3").style.display = 'flex';
-        for (var i = 0; i < data.logs.length; i++) {
+        var ul = document.getElementById("a9_d3");
+        ul.innerHTML = ''; // Clear existing list items
+        data.logs.forEach(log => {
             var li = document.createElement("li");
-            li.innerHTML = data.logs[i];
+            var text = document.createTextNode(log);
+            li.appendChild(text);
             document.getElementById("a9_d3").appendChild(li);
-        }
+        });
     })
     .catch(error => console.log('error', error));
-    }
+}
