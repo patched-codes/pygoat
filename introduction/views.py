@@ -200,6 +200,9 @@ class TestUser:
     admin: int = 0
 pickled_user = pickle.dumps(TestUser())
 encoded_user = base64.b64encode(pickled_user)
+import json
+import base64
+from django.shortcuts import render, redirect
 
 def insec_des_lab(request):
     if request.user.is_authenticated:
@@ -207,11 +210,11 @@ def insec_des_lab(request):
         token = request.COOKIES.get('token')
         if token == None:
             token = encoded_user
-            response.set_cookie(key='token',value=token.decode('utf-8'))
+            response.set_cookie(key='token', value=token.decode('utf-8'), secure=True, httponly=True, samesite='Lax')
         else:
             token = base64.b64decode(token)
-            admin = pickle.loads(token)
-            if admin.admin == 1:
+            admin = json.loads(token)
+            if admin.get('admin') == 1:
                 response = render(request,'Lab/insec_des/insec_des_lab.html', {"message":"Welcome Admin, SECRETKEY:ADMIN123"})
                 return response
 
@@ -234,16 +237,15 @@ def xxe_lab(request):
         return render(request,'Lab/XXE/xxe_lab.html')
     else:
         return redirect('login')
-
-@csrf_exempt
 def xxe_see(request):
     if request.user.is_authenticated:
 
         data=comments.objects.all()
         com=data[0].comment
-        return render(request,'Lab/XXE/xxe_lab.html',{"com":com})
+        return render(request,'Lab/XXE/xxe_lab.html',{"com":com}, request=request)
     else:
         return redirect('login')
+
 
 
 @csrf_exempt
@@ -269,6 +271,10 @@ def auth_home(request):
 
 def auth_lab(request):
     return render(request,'Lab/AUTH/auth_lab.html')
+from django.shortcuts import render, redirect
+from django.http import HttpResponse
+from django.template.loader import render_to_string
+from .models import authLogin
 
 def auth_lab_signup(request):
     if request.method == 'GET':
@@ -279,24 +285,24 @@ def auth_lab_signup(request):
             user_name = request.POST['username']
             passwd  = request.POST['pass']
             obj = authLogin.objects.create(name=name,username=user_name,password=passwd)
-            try:
-                rendered = render_to_string('Lab/AUTH/auth_success.html', {'username': obj.username,'userid':obj.userid,'name':obj.name,'err_msg':'Cookie Set'})
-                response = HttpResponse(rendered)
-                response.set_cookie('userid', obj.userid, max_age=31449600, samesite=None, secure=False)
-                print('Setting cookie successful')
-                return response
-            except:
-                render(request,'Lab/AUTH/auth_lab_signup.html',{'err_msg':'Cookie cannot be set'})
+            response = render(request, 'Lab/AUTH/auth_success.html', {'username': obj.username,'userid':obj.userid,'name':obj.name,'err_msg':'Cookie Set'})
+            response.set_cookie('userid', obj.userid, max_age=31449600, samesite='Lax', secure=True, httponly=True)
+            print('Setting cookie successful')
+            return response
         except:
             return render(request,'Lab/AUTH/auth_lab_signup.html',{'err_msg':'Username already exists'})
+
+from django.shortcuts import render
+from django.template.loader import render_to_string
+from django.http import HttpResponse
+from .models import authLogin
 
 def auth_lab_login(request):
     if request.method == 'GET':
         try:
             obj = authLogin.objects.filter(userid=request.COOKIES['userid'])[0]
-            rendered = render_to_string('Lab/AUTH/auth_success.html', {'username': obj.username,'userid':obj.userid,'name':obj.name, 'err_msg':'Login Successful'})
-            response = HttpResponse(rendered)
-            response.set_cookie('userid', obj.userid, max_age=31449600, samesite=None, secure=False)
+            response = render(request, 'Lab/AUTH/auth_success.html', {'username': obj.username,'userid':obj.userid,'name':obj.name, 'err_msg':'Login Successful'})
+            response.set_cookie('userid', obj.userid, max_age=31449600, samesite='Lax', secure=True, httponly=True)
             print('Login successful')
             return response
         except:
@@ -308,9 +314,8 @@ def auth_lab_login(request):
             print(user_name,passwd)
             obj = authLogin.objects.filter(username=user_name,password=passwd)[0]
             try:
-                rendered = render_to_string('Lab/AUTH/auth_success.html', {'username': obj.username,'userid':obj.userid,'name':obj.name, 'err_msg':'Login Successful'})
-                response = HttpResponse(rendered)
-                response.set_cookie('userid', obj.userid, max_age=31449600, samesite=None, secure=False)
+                response = render(request, 'Lab/AUTH/auth_success.html', {'username': obj.username,'userid':obj.userid,'name':obj.name, 'err_msg':'Login Successful'})
+                response.set_cookie('userid', obj.userid, max_age=31449600, samesite='Lax', secure=True, httponly=True)
                 print('Login successful')
                 return response
             except:
@@ -318,21 +323,21 @@ def auth_lab_login(request):
         except:
             return render(request,'Lab/AUTH/auth_lab_login.html',{'err_msg':'Check your credentials'})
 
+from django.http import JsonResponse
+from django.template.loader import render_to_string
+
 def auth_lab_logout(request):
     rendered = render_to_string('Lab/AUTH/auth_lab.html',context={'err_msg':'Logout successful'})
-    response = HttpResponse(rendered)    
+    response = JsonResponse({'html': rendered})    
     response.delete_cookie('userid')
     return response
 
-#***************************************************************Broken Access Control************************************************************#
-
-@csrf_exempt
 def ba(request):
     if request.user.is_authenticated:
         return render(request,"Lab/BrokenAccess/ba.html")
     else:
         return redirect('login')
-@csrf_exempt
+
 def ba_lab(request):
     if request.user.is_authenticated:
         name = request.POST.get('name')
@@ -405,7 +410,6 @@ def cmd(request):
         return render(request,'Lab/CMD/cmd.html')
     else:
         return redirect('login')
-@csrf_exempt
 def cmd_lab(request):
     if request.user.is_authenticated:
         if(request.method=="POST"):
@@ -413,23 +417,21 @@ def cmd_lab(request):
             domain=domain.replace("https://www.",'')
             os=request.POST.get('os')
             print(os)
-            if(os=='win'):
-                command="nslookup {}".format(domain)
-            else:
-                command = "dig {}".format(domain)
-            
+
+            commands = {
+                'win': ['nslookup', domain],
+                'other': ['dig', domain],
+            }
+            command = commands.get(os, commands['other'])
+
             try:
-                # output=subprocess.check_output(command,shell=True,encoding="UTF-8")
                 process = subprocess.Popen(
                     command,
-                    shell=True,
                     stdout=subprocess.PIPE, 
                     stderr=subprocess.PIPE)
                 stdout, stderr = process.communicate()
                 data = stdout.decode('utf-8')
                 stderr = stderr.decode('utf-8')
-                # res = json.loads(data)
-                # print("Stdout\n" + data)
                 output = data + stderr
                 print(data + stderr)
             except:
@@ -481,8 +483,6 @@ def bau_lab(request):
 
 def login_otp(request):
     return render(request,"Lab/BrokenAuth/otp.html")
-
-@csrf_exempt
 def Otp(request):
     if request.method=="GET":
         email=request.GET.get('email')
@@ -540,7 +540,6 @@ def a9(request):
         return render(request,"Lab/A9/a9.html")
     else:
         return redirect('login')
-@csrf_exempt
 def a9_lab(request):
     if request.user.is_authenticated:
         if request.method=="GET":
@@ -550,7 +549,7 @@ def a9_lab(request):
             try :
                 file=request.FILES["file"]
                 try :
-                    data = yaml.load(file,yaml.Loader)
+                    data = yaml.safe_load(file)
                     
                     return render(request,"Lab/A9/a9_lab.html",{"data":data})
                 except:
@@ -562,8 +561,6 @@ def a9_lab(request):
         return redirect('login')
 def get_version(request):
       return render(request,"Lab/A9/a9_lab.html",{"version":"pyyaml v5.1"})
-
-@csrf_exempt
 def a9_lab2(request):
     if not request.user.is_authenticated:
         return redirect('login')
@@ -721,22 +718,17 @@ def insec_desgine_lab(request):
             pass
     else:
         return redirect('login')
-
-
 #-------------------------------------------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------------------------------------------
 
 ###################################################### 2021 A1: Broken Access
 
-@csrf_exempt
 def a1_broken_access(request):
     if not request.user.is_authenticated:
         return redirect('login')
     
     return render(request,"Lab_2021/A1_BrokenAccessControl/broken_access.html")
 
-
-@csrf_exempt
 def a1_broken_access_lab_1(request):
     if request.user.is_authenticated:
         pass
@@ -771,8 +763,6 @@ def a1_broken_access_lab_1(request):
 
     else:
         return render(request,'Lab_2021/A1_BrokenAccessControl/broken_access_lab_1.html',{"no_creds":True})
-
-@csrf_exempt
 def a1_broken_access_lab_2(request):
     if request.user.is_authenticated:
         pass
@@ -812,6 +802,7 @@ def a1_broken_access_lab_2(request):
     else:
         return render(request,'Lab_2021/A1_BrokenAccessControl/broken_access_lab_2.html',{"no_creds":True})
 
+
 def a1_broken_access_lab_3(request):
     if not request.user.is_authenticated:
         return redirect('login')
@@ -832,19 +823,14 @@ def a1_broken_access_lab3_secret(request):
         return redirect('login')
     # no checking applied here
     return render(request, 'Lab_2021/A1_BrokenAccessControl/secret.html')
-
-
 ###################################################### 2021 A3: Injection
 
-@csrf_exempt
 def injection(request):
     if not request.user.is_authenticated:
         return redirect('login')
     
     return render(request,"Lab_2021/A3_Injection/injection.html")
 
-
-@csrf_exempt
 def injection_sql_lab(request):
     if request.user.is_authenticated:
 
@@ -854,7 +840,7 @@ def injection_sql_lab(request):
         print(password)
 
         if name:
-            sql_query = "SELECT * FROM introduction_sql_lab_table WHERE id='"+name+"'AND password='"+password+"'"
+            sql_query = "SELECT * FROM introduction_sql_lab_table WHERE id=%s AND password=%s"
 
             sql_instance = sql_lab_table(id="admin", password="65079b006e85a7e798abecb99e47c154")
             sql_instance.save()
@@ -868,7 +854,7 @@ def injection_sql_lab(request):
             print(sql_query)
 
             try:
-                user = sql_lab_table.objects.raw(sql_query)
+                user = sql_lab_table.objects.raw(sql_query, [name, password])
                 user = user[0].id
                 print(user)
 
@@ -897,6 +883,7 @@ def injection_sql_lab(request):
         return redirect('login')
 
 
+
 ##----------------------------------------------------------------------------------------------------------
 ##----------------------------------------------------------------------------------------------------------
 
@@ -907,7 +894,6 @@ def ssrf(request):
         return render(request,"Lab/ssrf/ssrf.html")
     else:
         return redirect('login')
-
 def ssrf_lab(request):
     if request.user.is_authenticated:
         if request.method=="GET":
@@ -917,6 +903,7 @@ def ssrf_lab(request):
             try :
                 dirname = os.path.dirname(__file__)
                 filename = os.path.join(dirname, file)
+                filename = os.path.abspath(filename)
                 file = open(filename,"r")
                 data = file.read()
                 return render(request,"Lab/ssrf/ssrf_lab.html",{"blog":data})
@@ -944,7 +931,6 @@ def ssrf_target(request):
         return render(request,"Lab/ssrf/ssrf_target.html")
     else:
         return render(request,"Lab/ssrf/ssrf_target.html",{"access_denied":True})
-
 @authentication_decorator
 def ssrf_lab2(request):
     if request.method == "GET":
@@ -952,10 +938,15 @@ def ssrf_lab2(request):
 
     elif request.method == "POST":
         url = request.POST["url"]
-        try:
-            response = requests.get(url)
-            return render(request, "Lab/ssrf/ssrf_lab2.html", {"response": response.content.decode()})
-        except:
+        parsed_url = urlparse(url)
+
+        if parsed_url.scheme in ["http", "https"] and parsed_url.hostname == "www.example.com":
+            try:
+                response = requests.get(url)
+                return render(request, "Lab/ssrf/ssrf_lab2.html", {"response": "Request successful"})
+            except:
+                return render(request, "Lab/ssrf/ssrf_lab2.html", {"error": "Invalid URL"})
+        else:
             return render(request, "Lab/ssrf/ssrf_lab2.html", {"error": "Invalid URL"})
 #--------------------------------------- Server-side template injection --------------------------------------#
 
@@ -964,7 +955,6 @@ def ssti(request):
         return render(request,"Lab_2021/A3_Injection/ssti.html")
     else:
         return redirect('login')
-
 def ssti_lab(request):
     if request.user.is_authenticated:
         if request.method=="GET":
@@ -985,9 +975,9 @@ def ssti_lab(request):
             new_blog.save() 
             dirname = os.path.dirname(__file__)
             filename = os.path.join(dirname, f"templates/Lab_2021/A3_Injection/Blogs/{id}.html")
-            file = open(filename, "w+") 
-            file.write(blog)
-            file.close()
+            context = {'blog_content': blog}
+            with open(filename, "w+") as file:
+                file.write(render_to_string('blog_template.html', context))
             return redirect(f'blog/{id}')
     else:
         return redirect('login')
@@ -1007,6 +997,7 @@ def crypto_failure(request):
         return render(request,"Lab_2021/A2_Crypto_failur/crypto_failure.html",{"success":False,"failure":False})
     else:
         redirect('login')
+import hashlib
 
 def crypto_failure_lab(request):
     if request.user.is_authenticated:
@@ -1016,13 +1007,14 @@ def crypto_failure_lab(request):
             username = request.POST["username"]
             password = request.POST["password"]
             try:
-                password = md5(password.encode()).hexdigest()
+                password = hashlib.scrypt(password.encode(), salt=b'salt', n=16384, r=8, p=1)
                 user = CF_user.objects.get(username=username,password=password)
                 return render(request,"Lab_2021/A2_Crypto_failur/crypto_failure_lab.html",{"user":user, "success":True,"failure":False})
             except:
                 return render(request,"Lab_2021/A2_Crypto_failur/crypto_failure_lab.html",{"success":False, "failure":True})
     else :
         return redirect('login')
+
 
 def crypto_failure_lab2(request):
     if request.user.is_authenticated:
@@ -1037,7 +1029,6 @@ def crypto_failure_lab2(request):
                 return render(request,"Lab_2021/A2_Crypto_failur/crypto_failure_lab2.html",{"user":user, "success":True,"failure":False})
             except:
                 return render(request,"Lab_2021/A2_Crypto_failur/crypto_failure_lab2.html",{"success":False, "failure":True})
-
 # based on CWE-319
 def crypto_failure_lab3(request):
     if request.user.is_authenticated:
@@ -1066,7 +1057,7 @@ def crypto_failure_lab3(request):
                     expire = datetime.datetime.now() + datetime.timedelta(minutes=60)
                     cookie = f"{username}|{expire}"
                     response = render(request,"Lab_2021/A2_Crypto_failur/crypto_failure_lab3.html",{"success":True, "failure":False , "admin":False})
-                    response.set_cookie("cookie", cookie)
+                    response.set_cookie("cookie", cookie, secure=True, httponly=True, samesite='Lax')
                     response.status_code = 200
                     return response
                 else:
@@ -1076,10 +1067,9 @@ def crypto_failure_lab3(request):
             except:
                 return render(request,"Lab_2021/A2_Crypto_failur/crypto_failure_lab2.html",{"success":False, "failure":True})
 
+
 #-----------------------------------------------SECURITY MISCONFIGURATION -------------------
 from pygoat.settings import SECRET_COOKIE_KEY
-
-
 def sec_misconfig_lab3(request):
     if not request.user.is_authenticated:
         return redirect('login')
@@ -1099,8 +1089,9 @@ def sec_misconfig_lab3(request):
 
         cookie = jwt.encode(payload, SECRET_COOKIE_KEY, algorithm='HS256')
         response = render(request,"Lab/sec_mis/sec_mis_lab3.html", {"admin":False} )
-        response.set_cookie(key = "auth_cookie", value = cookie)
+        response.set_cookie(key = "auth_cookie", value = cookie, secure=True, httponly=True, samesite='Lax')
         return response
+
 
 # - ------------------------Identification and Authentication Failures--------------------------------
 @authentication_decorator
@@ -1159,7 +1150,6 @@ USER_A7_LAB3 = {
     "User3":{"userid":"3", "username":"User3", "password": "5a91a66f0c86b5435fe748706b99c17e6e54a17e03c2a3ef8d0dfa918db41cf6"},
     "User4":{"userid":"4", "username":"User4", "password": "6046bc3337728a60967a151ee584e4fd7c53740a49485ebdc38cac42a255f266"}
 }
-
 # USER_A7_LAB3 = {
 #     "User1":{"userid":"1", "username":"User1", "password": "Hash1"},
 #     "User2":{"userid":"2", "username":"User2", "password": "Hash2"},
@@ -1168,7 +1158,6 @@ USER_A7_LAB3 = {
 # }
 
 @authentication_decorator
-@csrf_exempt
 def auth_failure_lab3(request):
     if request.method == "GET":
         try:
@@ -1187,15 +1176,16 @@ def auth_failure_lab3(request):
             password = hashlib.sha256(password.encode()).hexdigest()
         except:
             response = render(request, "Lab_2021/A7_auth_failure/lab3.html")
-            response.set_cookie("session_id", None)
+            response.set_cookie("session_id", None, secure=True, httponly=True, samesite='Lax')
             return response
 
         if USER_A7_LAB3[username]['password'] == password:
             session_data = AF_session_id.objects.create(session_id=token, user=USER_A7_LAB3[username]['username'])
             session_data.save()
             response = render(request, "Lab_2021/A7_auth_failure/lab3.html", {"success":True, "failure":False, "username":username})
-            response.set_cookie("session_id", token)
+            response.set_cookie("session_id", token, secure=True, httponly=True, samesite='Lax')
             return response
+
 
 #-- coding playground for lab2
 @authentication_decorator

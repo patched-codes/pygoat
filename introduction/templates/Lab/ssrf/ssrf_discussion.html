@@ -123,25 +123,28 @@ def ssrf_lab(request):
                     <textarea id="html">
 <div style="display:flex;flex-direction:row;align-items:center;margin:15px">
     <form method="post" action="/ssrf_lab">
-        {&#37; csrf_token &#37;}
+        {% csrf_token %}
         <input type="hidden" name="blog" value="templates/Lab/ssrf/blogs/blog1.txt">
         <button type="submit" class="btn btn-info"> Blog1 </button>
     </form>
+
     <form method="post" action="/ssrf_lab">
         {&#37; csrf_token &#37;}
         <input type="hidden" name="blog" value="templates/Lab/ssrf/blogs/blog2.txt">
         <button type="submit" class="btn btn-info"> Blog2 </button>
     </form>
     <form method="post" action="/ssrf_lab">
-        {&#37; csrf_token &#37;}
+        {% csrf_token %}
         <input type="hidden" name="blog" value="templates/Lab/ssrf/blogs/blog3.txt">
         <button type="submit" class="btn btn-info"> Blog3 </button>
     </form>
+
     <form method="post" action="/ssrf_lab">
-        {&#37; csrf_token &#37;}
+        {% csrf_token %}
         <input type="hidden" name="blog" value="templates/Lab/ssrf/blogs/blog4.txt">
         <button type="submit" class="btn btn-info"> Blog4 </button>
     </form>
+
 </div></textarea> 
                 </div>
             </div>
