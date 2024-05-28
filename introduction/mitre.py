@@ -150,6 +150,9 @@ def mitre_top24(request):
 def mitre_top25(request):
     if request.method == 'GET':
         return render(request, 'mitre/mitre_top25.html')
+import os
+from hashlib import scrypt
+from base64 import urlsafe_b64encode
 
 @authentication_decorator
 def csrf_lab_login(request):
@@ -158,23 +161,23 @@ def csrf_lab_login(request):
     elif request.method == 'POST':
         password = request.POST.get('password')
         username = request.POST.get('username')
-        password = md5(password.encode()).hexdigest()
+        salt = b'some_salt'  # Ideally, use a unique salt for each password and store it securely with the password hash.
+        password = urlsafe_b64encode(scrypt(password.encode(), salt=salt, n=16384, r=8, p=1, maxmem=0, dklen=32))
         User = CSRF_user_tbl.objects.filter(username=username, password=password)
         if User:
-            payload ={
+            payload = {
                 'username': username,
                 'exp': datetime.datetime.utcnow() + datetime.timedelta(seconds=300),
                 'iat': datetime.datetime.utcnow()
             }
-            cookie = jwt.encode(payload, 'csrf_vulneribility', algorithm='HS256')
+            jwt_secret = os.getenv('JWT_SECRET')
+            cookie = jwt.encode(payload, jwt_secret, algorithm='HS256')
             response = redirect("/mitre/9/lab/transaction")
-            response.set_cookie('auth_cookiee', cookie)
+            response.set_cookie('auth_cookiee', cookie, secure=True, httponly=True, samesite='Lax')
             return response
-        else :
+        else:
             return redirect('/mitre/9/lab/login')
-
 @authentication_decorator
-@csrf_exempt
 def csrf_transfer_monei(request):
     if request.method == 'GET':
         try:
@@ -187,6 +190,7 @@ def csrf_transfer_monei(request):
             return render(request, 'mitre/csrf_dashboard.html', {'balance': User[0].balance})
         except:
             return redirect('/mitre/9/lab/login')
+
 
 def csrf_transfer_monei_api(request,recipent,amount):
     if request.method == "GET":
@@ -211,14 +215,18 @@ def csrf_transfer_monei_api(request,recipent,amount):
 
 
 # @authentication_decorator
-@csrf_exempt
 def mitre_lab_25_api(request):
     if request.method == "POST":
-        expression = request.POST.get('expression')
-        result = eval(expression)
-        return JsonResponse({'result': result})
+        try:
+            import ast
+            expression = request.POST.get('expression')
+            result = ast.literal_eval(expression)
+            return JsonResponse({'result': result})
+        except (ValueError, SyntaxError):
+            return JsonResponse({'error': 'Invalid expression'}, status=400)
     else:
         return redirect('/mitre/25/lab/')
+
 
 
 @authentication_decorator
@@ -228,13 +236,11 @@ def mitre_lab_25(request):
 @authentication_decorator
 def mitre_lab_17(request):
     return render(request, 'mitre/mitre_lab_17.html')
+import subprocess
 
 def command_out(command):
-    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     return process.communicate()
-    
-
-@csrf_exempt
 def mitre_lab_17_api(request):
     if request.method == "POST":
         ip = request.POST.get('ip')

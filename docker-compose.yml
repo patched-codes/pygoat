@@ -9,6 +9,10 @@ services:
       - POSTGRES_DB=postgres
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+
   web:
     build: .
     image: pygoat/pygoat
@@ -20,6 +24,10 @@ services:
     depends_on:
       - migration
       - db
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+
   migration:
     image: pygoat/pygoat
     command: python pygoat/manage.py migrate --noinput
@@ -27,3 +35,6 @@ services:
       - .:/app
     depends_on:
       - db
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
