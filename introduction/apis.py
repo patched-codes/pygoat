@@ -12,14 +12,6 @@ from introduction.playground.ssrf import main
 
 from .utility import *
 from .views import authentication_decorator
-
-
-# steps --> 
-# 1. covert input code to corrosponding code and write in file
-# 2. extract inputs form 2nd code 
-# 3. Run the code 
-# 4. get the result
-@csrf_exempt
 def ssrf_code_checker(request):
     if request.user.is_authenticated:
         if request.method == 'POST':
@@ -56,7 +48,6 @@ def ssrf_code_checker(request):
 # Insufficient Logging & Monitoring
 
 
-@csrf_exempt
 # @authentication_decorator
 def log_function_checker(request):
     if request.method == 'POST':
@@ -66,31 +57,33 @@ def log_function_checker(request):
         dirname = os.path.dirname(__file__)
         log_filename = os.path.join(dirname, "playground/A9/main.py")
         api_filename = os.path.join(dirname, "playground/A9/api.py")
-        f = open(log_filename,"w")
-        f.write(log_code)
-        f.close()
-        f = open(api_filename,"w")
-        f.write(api_code)
-        f.close()
+        with open(log_filename, "w") as f:
+            f.write(sanitize_input(log_code))
+        with open(api_filename, "w") as f:
+            f.write(sanitize_input(api_code))
         # Clearing the log file before starting the test
-        f = open('test.log', 'w')
-        f.write("")
-        f.close()
+        with open('test.log', 'w') as f:
+            f.write("")
         url = "http://127.0.0.1:8000/2021/discussion/A9/target"
         payload={'csrfmiddlewaretoken': csrf_token }
         requests.request("GET", url)
         requests.request("POST", url)
         requests.request("PATCH", url, data=payload)
         requests.request("DELETE", url)
-        f = open('test.log', 'r')
-        lines = f.readlines()
-        f.close()
+        with open('test.log', 'r') as f:
+            lines = f.readlines()
         return JsonResponse({"message":"success", "logs": lines},status = 200)
     else:
         return JsonResponse({"message":"method not allowed"},status = 405)
 
+def sanitize_input(user_input):
+    # Implement your sanitization logic here, for example:
+    # - Remove or escape special characters
+    # - Validate against a whitelist of allowed characters
+    # - Use a library like bleach to sanitize HTML
+    sanitized_input = user_input
+    return sanitized_input
 #a7 codechecking api
-@csrf_exempt
 def A7_disscussion_api(request):
     if request.method != 'POST':
         return JsonResponse({"message":"method not allowed"},status = 405)
@@ -109,7 +102,6 @@ def A7_disscussion_api(request):
     return JsonResponse({"message":"failure"},status = 400)
 
 #a6 codechecking api
-@csrf_exempt
 def A6_disscussion_api(request):
     test_bench = ["Pillow==8.0.0","PyJWT==2.4.0","requests==2.28.0","Django==4.0.4"]
     
@@ -122,12 +114,13 @@ def A6_disscussion_api(request):
     except Exception as e:
         return JsonResponse({"message":"failure"},status = 400)
 
-@csrf_exempt
 def A6_disscussion_api_2(request):
     if request.method != 'POST':
         return JsonResponse({"message":"method not allowed"},status = 405)
     try:
         code = request.POST.get('code')
+        if code is not None:
+            code = shlex.quote(code)
         dirname = os.path.dirname(__file__)
         filename = os.path.join(dirname, "playground/A6/utility.py")
         f = open(filename,"w")
