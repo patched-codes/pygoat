@@ -150,7 +150,15 @@ def mitre_top24(request):
 def mitre_top25(request):
     if request.method == 'GET':
         return render(request, 'mitre/mitre_top25.html')
+import os
+import hashlib
+from django.shortcuts import render, redirect
+import jwt
+import datetime
+from .models import CSRF_user_tbl
+from django.views.decorators.csrf import csrf_exempt
 
+@csrf_exempt
 @authentication_decorator
 def csrf_lab_login(request):
     if request.method == 'GET':
@@ -158,23 +166,28 @@ def csrf_lab_login(request):
     elif request.method == 'POST':
         password = request.POST.get('password')
         username = request.POST.get('username')
-        password = md5(password.encode()).hexdigest()
-        User = CSRF_user_tbl.objects.filter(username=username, password=password)
+        # Use scrypt for password hashing
+        salt = os.urandom(16)  # Replace with a secure random salt generation in production
+        hashed_password = hashlib.scrypt(password.encode(), salt=salt, n=16384, r=8, p=1)
+        User = CSRF_user_tbl.objects.filter(username=username, password=hashed_password)
         if User:
+            # Retrieve JWT secret from environment variable
+            jwt_secret = os.environ.get('JWT_SECRET')
+            if not jwt_secret:
+                raise ValueError("JWT_SECRET environment variable not set")
             payload ={
                 'username': username,
                 'exp': datetime.datetime.utcnow() + datetime.timedelta(seconds=300),
                 'iat': datetime.datetime.utcnow()
             }
-            cookie = jwt.encode(payload, 'csrf_vulneribility', algorithm='HS256')
+            cookie = jwt.encode(payload, jwt_secret, algorithm='HS256')
             response = redirect("/mitre/9/lab/transaction")
-            response.set_cookie('auth_cookiee', cookie)
+            response.set_cookie('auth_cookiee', cookie, secure=True, httponly=True, samesite='Lax')
             return response
         else :
             return redirect('/mitre/9/lab/login')
 
 @authentication_decorator
-@csrf_exempt
 def csrf_transfer_monei(request):
     if request.method == 'GET':
         try:
@@ -208,15 +221,21 @@ def csrf_transfer_monei_api(request,recipent,amount):
         return redirect('/mitre/9/lab/transaction') 
     else:
         return redirect ('/mitre/9/lab/transaction')
-
-
 # @authentication_decorator
-@csrf_exempt
+from django.views.decorators.csrf import csrf_protect
+from django.http import JsonResponse
+from django.shortcuts import redirect
+import ast
+
+@csrf_protect
 def mitre_lab_25_api(request):
     if request.method == "POST":
         expression = request.POST.get('expression')
-        result = eval(expression)
-        return JsonResponse({'result': result})
+        try:
+            result = ast.literal_eval(expression)
+            return JsonResponse({'result': result})
+        except (SyntaxError, ValueError) as e:
+            return JsonResponse({'error': 'Invalid expression'}, status=400)
     else:
         return redirect('/mitre/25/lab/')
 
@@ -228,13 +247,11 @@ def mitre_lab_25(request):
 @authentication_decorator
 def mitre_lab_17(request):
     return render(request, 'mitre/mitre_lab_17.html')
-
 def command_out(command):
-    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    process = subprocess.Popen(command, shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     return process.communicate()
     
 
-@csrf_exempt
 def mitre_lab_17_api(request):
     if request.method == "POST":
         ip = request.POST.get('ip')
