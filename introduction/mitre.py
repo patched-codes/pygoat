@@ -1,4 +1,5 @@
 import datetime
+import shlex
 import re
 import subprocess
 from hashlib import md5
@@ -158,23 +159,28 @@ def csrf_lab_login(request):
     elif request.method == 'POST':
         password = request.POST.get('password')
         username = request.POST.get('username')
-        password = md5(password.encode()).hexdigest()
-        User = CSRF_user_tbl.objects.filter(username=username, password=password)
+        # Use a stronger hashing algorithm such as bcrypt
+        password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+        User = CSRF_user_tbl.objects.filter(username=username, password=password_hash)
         if User:
             payload ={
                 'username': username,
                 'exp': datetime.datetime.utcnow() + datetime.timedelta(seconds=300),
                 'iat': datetime.datetime.utcnow()
             }
-            cookie = jwt.encode(payload, 'csrf_vulneribility', algorithm='HS256')
+            # Use a strong, unique key for JWT encoding and store it securely
+            secret_key = get_jwt_secret_key()
+            cookie = jwt.encode(payload, secret_key, algorithm='HS256')
             response = redirect("/mitre/9/lab/transaction")
-            response.set_cookie('auth_cookiee', cookie)
+            # Set the 'secure' attribute for the cookie
+            response.set_cookie('auth_cookiee', cookie, secure=True, httponly=True)
             return response
         else :
             return redirect('/mitre/9/lab/login')
 
+
 @authentication_decorator
-@csrf_exempt
+@csrf_protect
 def csrf_transfer_monei(request):
     if request.method == 'GET':
         try:
@@ -183,7 +189,7 @@ def csrf_transfer_monei(request):
             username = payload['username']
             User = CSRF_user_tbl.objects.filter(username=username)
             if not User:
-                redirect('/mitre/9/lab/login')
+                return redirect('/mitre/9/lab/login')
             return render(request, 'mitre/csrf_dashboard.html', {'balance': User[0].balance})
         except:
             return redirect('/mitre/9/lab/login')
@@ -209,16 +215,28 @@ def csrf_transfer_monei_api(request,recipent,amount):
     else:
         return redirect ('/mitre/9/lab/transaction')
 
-
-# @authentication_decorator
-@csrf_exempt
+@csrf_protect
 def mitre_lab_25_api(request):
     if request.method == "POST":
         expression = request.POST.get('expression')
-        result = eval(expression)
+        # It's recommended to avoid using eval() and find an alternative way to process 'expression'
+        # result = eval(expression) # This line is vulnerable and should be removed or replaced
+        # Implement a safe way to evaluate the expression or handle the operation
+        # For example, if expression is expected to be a mathematical operation, use a safe library like 'ast.literal_eval' with proper validation
+        try:
+            # Safely evaluate the expression
+            result = safe_eval(expression)
+        except Exception as e:
+            # Handle exceptions or invalid expressions
+            result = str(e)
         return JsonResponse({'result': result})
     else:
         return redirect('/mitre/25/lab/')
+
+def safe_eval(expression):
+    # Implement a safe evaluation function or use a third-party library
+    # This is a placeholder for the actual safe evaluation logic
+    pass
 
 
 @authentication_decorator
@@ -230,9 +248,10 @@ def mitre_lab_17(request):
     return render(request, 'mitre/mitre_lab_17.html')
 
 def command_out(command):
-    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    safe_command = shlex.split(command)
+    process = subprocess.Popen(safe_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     return process.communicate()
-    
+
 
 @csrf_exempt
 def mitre_lab_17_api(request):
