@@ -58,6 +58,8 @@ def ssrf_code_checker(request):
 
 @csrf_exempt
 # @authentication_decorator
+import os
+
 def log_function_checker(request):
     if request.method == 'POST':
         csrf_token = request.POST.get("csrfmiddlewaretoken")
@@ -66,28 +68,30 @@ def log_function_checker(request):
         dirname = os.path.dirname(__file__)
         log_filename = os.path.join(dirname, "playground/A9/main.py")
         api_filename = os.path.join(dirname, "playground/A9/api.py")
-        f = open(log_filename,"w")
-        f.write(log_code)
-        f.close()
-        f = open(api_filename,"w")
-        f.write(api_code)
-        f.close()
+        
+        with open(log_filename, "w") as f:
+            f.write(log_code)
+        
+        with open(api_filename, "w") as f:
+            f.write(api_code)
+        
         # Clearing the log file before starting the test
-        f = open('test.log', 'w')
-        f.write("")
-        f.close()
+        with open('test.log', 'w') as f:
+            f.write("")
+        
         url = "http://127.0.0.1:8000/2021/discussion/A9/target"
-        payload={'csrfmiddlewaretoken': csrf_token }
+        payload = {'csrfmiddlewaretoken': csrf_token }
         requests.request("GET", url)
         requests.request("POST", url)
         requests.request("PATCH", url, data=payload)
         requests.request("DELETE", url)
-        f = open('test.log', 'r')
-        lines = f.readlines()
-        f.close()
-        return JsonResponse({"message":"success", "logs": lines},status = 200)
+        
+        with open('test.log', 'r') as f:
+            lines = f.readlines()
+        
+        return JsonResponse({"message": "success", "logs": lines}, status = 200)
     else:
-        return JsonResponse({"message":"method not allowed"},status = 405)
+        return JsonResponse({"message": "method not allowed"}, status = 405)
 
 #a7 codechecking api
 @csrf_exempt
@@ -128,11 +132,14 @@ def A6_disscussion_api_2(request):
         return JsonResponse({"message":"method not allowed"},status = 405)
     try:
         code = request.POST.get('code')
-        dirname = os.path.dirname(__file__)
-        filename = os.path.join(dirname, "playground/A6/utility.py")
-        f = open(filename,"w")
-        f.write(code)
-        f.close()
-    except:
-        return JsonResponse({"message":"missing code"},status = 400)
+        if code:
+            code = code[:1024]  # Limit input to prevent excessive file size
+            dirname = os.path.dirname(__file__)
+            filename = os.path.join(dirname, "playground/A6/utility.py")
+            with open(filename, "w") as f:
+                f.write(code)
+        else:
+            return JsonResponse({"message":"missing code"},status = 400)
+    except Exception as e:
+        return JsonResponse({"message":"error writing to file"},status = 500)
     return JsonResponse({"message":"success"},status = 200)
