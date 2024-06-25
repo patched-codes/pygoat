@@ -1,10 +1,8 @@
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 
 from .main import Log
 
 
-@csrf_exempt
 def log_function_target(request):
     L = Log(request)
     if request.method == "GET":
@@ -45,18 +43,15 @@ class Log:
 
     def info(self,msg):
         now = datetime.datetime.now()
-        f = open('test.log', 'a')
-        f.write(f"INFO:{now}:{msg}\n")
-        f.close()
+        with open('test.log', 'a') as f:
+            f.write(f"INFO:{now}:{msg}\n")
 
     def warning(self,msg):
         now = datetime.datetime.now()
-        f = open('test.log', 'a')
-        f.write(f"WARNING:{now}:{msg}\n")
-        f.close()
+        with open('test.log', 'a') as f:
+            f.write(f"WARNING:{now}:{msg}\n")
 
     def error(self,msg):
         now = datetime.datetime.now()
-        f = open('test.log', 'a')
-        f.write(f"ERROR:{now}:{msg}\n")
-        f.close()
+        with open('test.log', 'a') as f:
+            f.write(f"ERROR:{now}:{msg}\n")
