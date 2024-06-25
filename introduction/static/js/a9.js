@@ -37,9 +37,9 @@ event3 = function(){
         document.getElementById("a9_d3").style.display = 'flex';
         for (var i = 0; i < data.logs.length; i++) {
             var li = document.createElement("li");
-            li.innerHTML = data.logs[i];
+            li.textContent = data.logs[i]; // Use textContent instead of innerHTML
             document.getElementById("a9_d3").appendChild(li);
         }
     })
     .catch(error => console.log('error', error));
-    }
+}
