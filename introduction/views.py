@@ -201,20 +201,35 @@ class TestUser:
 pickled_user = pickle.dumps(TestUser())
 encoded_user = base64.b64encode(pickled_user)
 
+import base64
+import json
+import jsonschema
+
 def insec_des_lab(request):
     if request.user.is_authenticated:
-        response = render(request,'Lab/insec_des/insec_des_lab.html', {"message":"Only Admins can see this page"})
+        response = render(request, 'Lab/insec_des/insec_des_lab.html', {"message": "Only Admins can see this page"})
         token = request.COOKIES.get('token')
-        if token == None:
+        if token is None:
             token = encoded_user
-            response.set_cookie(key='token',value=token.decode('utf-8'))
+            response.set_cookie(key='token', value=token.decode('utf-8'))
         else:
-            token = base64.b64decode(token)
-            admin = pickle.loads(token)
-            if admin.admin == 1:
-                response = render(request,'Lab/insec_des/insec_des_lab.html', {"message":"Welcome Admin, SECRETKEY:ADMIN123"})
-                return response
-
+            token = base64.b64decode(token).decode('utf-8')
+            try:
+                admin_schema = {
+                    "type": "object",
+                    "properties": {
+                        "admin": {"type": "integer"}
+                    },
+                    "required": ["admin"],
+                    "additionalProperties": False
+                }
+                admin = json.loads(token)
+                jsonschema.validate(instance=admin, schema=admin_schema)
+                if admin.get('admin') == 1:
+                    response = render(request, 'Lab/insec_des/insec_des_lab.html', {"message": "Welcome Admin, SECRETKEY:ADMIN123"})
+                    return response
+            except (json.JSONDecodeError, jsonschema.exceptions.ValidationError):
+                pass
         return response
     else:
         return redirect('login')
@@ -247,19 +262,22 @@ def xxe_see(request):
 
 
 @csrf_exempt
+from defusedxml.minidom import parseString
+
 def xxe_parse(request):
 
     parser = make_parser()
-    parser.setFeature(feature_external_ges, True)
-    doc = parseString(request.body.decode('utf-8'), parser=parser)
+    # Note: defusedxml does not require setting specific features; it is secure by default.
+    doc = parseString(request.body.decode('utf-8'))
+    text = ""
     for event, node in doc:
         if event == START_ELEMENT and node.tagName == 'text':
-            doc.expandNode(node)
-            text = node.toxml()
+            text_node = doc.documentElement.getElementsByTagName('text')[0]
+            text = text_node.toxml()
     startInd = text.find('>')
     endInd = text.find('<', startInd)
     text = text[startInd + 1:endInd:]
-    p=comments.objects.filter(id=1).update(comment=text)
+    p = comments.objects.filter(id=1).update(comment=text)
 
     return render(request, 'Lab/XXE/xxe_lab.html')
 
@@ -414,22 +432,19 @@ def cmd_lab(request):
             os=request.POST.get('os')
             print(os)
             if(os=='win'):
-                command="nslookup {}".format(domain)
+                command=["nslookup", domain]
             else:
-                command = "dig {}".format(domain)
+                command = ["dig", domain]
             
             try:
-                # output=subprocess.check_output(command,shell=True,encoding="UTF-8")
                 process = subprocess.Popen(
                     command,
-                    shell=True,
+                    shell=False,
                     stdout=subprocess.PIPE, 
                     stderr=subprocess.PIPE)
                 stdout, stderr = process.communicate()
                 data = stdout.decode('utf-8')
                 stderr = stderr.decode('utf-8')
-                # res = json.loads(data)
-                # print("Stdout\n" + data)
                 output = data + stderr
                 print(data + stderr)
             except:
@@ -443,18 +458,20 @@ def cmd_lab(request):
         return redirect('login')
 
 @csrf_exempt
+import json
+
 def cmd_lab2(request):
     if request.user.is_authenticated:
         if (request.method=="POST"):
-            val=request.POST.get('val')
+            val = request.POST.get('val')
             
             print(val)
             try:
-                output = eval(val)
+                output = json.loads(val)
+            except json.JSONDecodeError:
+                output = "Invalid JSON data"
             except:
                 output = "Something went wrong"
-                return render(request,'Lab/CMD/cmd_lab2.html',{"output":output})
-            print("Output = ", output)
             return render(request,'Lab/CMD/cmd_lab2.html',{"output":output})
         else:
             return render(request, 'Lab/CMD/cmd_lab2.html')
