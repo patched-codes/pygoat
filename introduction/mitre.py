@@ -152,15 +152,36 @@ def mitre_top25(request):
         return render(request, 'mitre/mitre_top25.html')
 
 @authentication_decorator
+from cryptography.hazmat.primitives.kdf.argon2 import Argon2
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.argon2 import Argon2id
+from base64 import urlsafe_b64encode, urlsafe_b64decode
+from django.shortcuts import render, redirect
+from mitre.models import CSRF_user_tbl
+import jwt
+import datetime
+
+def hash_password(password: str, salt: bytes) -> str:
+    kdf = Argon2id(salt=salt, length=32, hash_len=32, time_cost=2, memory_cost=512000)
+    hashed_password = kdf.derive(password.encode())
+    return urlsafe_b64encode(hashed_password).decode()
+
+def verify_password(stored_password: str, provided_password: str, salt: bytes) -> bool:
+    try:
+        kdf = Argon2id(salt=salt, length=32, hash_len=32, time_cost=2, memory_cost=512000)
+        kdf.verify(provided_password.encode(), urlsafe_b64decode(stored_password))
+        return True
+    except:
+        return False
+
 def csrf_lab_login(request):
     if request.method == 'GET':
         return render(request, 'mitre/csrf_lab_login.html')
     elif request.method == 'POST':
         password = request.POST.get('password')
         username = request.POST.get('username')
-        password = md5(password.encode()).hexdigest()
-        User = CSRF_user_tbl.objects.filter(username=username, password=password)
-        if User:
+        user = CSRF_user_tbl.objects.filter(username=username).first()
+        if user and verify_password(user.password, password, user.salt):
             payload ={
                 'username': username,
                 'exp': datetime.datetime.utcnow() + datetime.timedelta(seconds=300),
@@ -170,7 +191,7 @@ def csrf_lab_login(request):
             response = redirect("/mitre/9/lab/transaction")
             response.set_cookie('auth_cookiee', cookie)
             return response
-        else :
+        else:
             return redirect('/mitre/9/lab/login')
 
 @authentication_decorator
@@ -212,11 +233,29 @@ def csrf_transfer_monei_api(request,recipent,amount):
 
 # @authentication_decorator
 @csrf_exempt
+import math
+import ast
+
+def safe_eval(expr):
+    allowed_names = {
+        'math': math,
+        '__builtins__': {}
+    }
+    node = ast.parse(expr, mode='eval')
+    for sub_node in ast.walk(node):
+        if not (isinstance(sub_node, (ast.Expression, ast.BinOp, ast.UnaryOp, ast.Num, ast.Load, ast.Name, ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow, ast.USub))):
+            raise ValueError(f"Illegal expression: {expr}")
+    code = compile(node, "<string>", "eval")
+    return eval(code, {"__builtins__": {}}, allowed_names)
+
 def mitre_lab_25_api(request):
     if request.method == "POST":
         expression = request.POST.get('expression')
-        result = eval(expression)
-        return JsonResponse({'result': result})
+        try:
+            result = safe_eval(expression)
+            return JsonResponse({'result': result})
+        except (ValueError, SyntaxError):
+            return JsonResponse({'error': 'Invalid expression'}, status=400)
     else:
         return redirect('/mitre/25/lab/')
 
@@ -230,7 +269,7 @@ def mitre_lab_17(request):
     return render(request, 'mitre/mitre_lab_17.html')
 
 def command_out(command):
-    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    process = subprocess.Popen(command, shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     return process.communicate()
     
 
