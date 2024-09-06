@@ -202,6 +202,9 @@ pickled_user = pickle.dumps(TestUser())
 encoded_user = base64.b64encode(pickled_user)
 
 def insec_des_lab(request):
+    from jsonschema import validate, ValidationError
+    import json
+
     if request.user.is_authenticated:
         response = render(request,'Lab/insec_des/insec_des_lab.html', {"message":"Only Admins can see this page"})
         token = request.COOKIES.get('token')
@@ -210,15 +213,27 @@ def insec_des_lab(request):
             response.set_cookie(key='token',value=token.decode('utf-8'))
         else:
             token = base64.b64decode(token)
-            admin = pickle.loads(token)
-            if admin.admin == 1:
-                response = render(request,'Lab/insec_des/insec_des_lab.html', {"message":"Welcome Admin, SECRETKEY:ADMIN123"})
-                return response
+            intermediary_schema = {
+                "type": "object",
+                "properties": {
+                    "admin": {"type": "integer"}
+                },
+                "required": ["admin"],
+                "additionalProperties": False,
+            }
+            try:
+                intermediary_object = json.loads(token)
+                validate(instance=intermediary_object, schema=intermediary_schema)
+                if intermediary_object['admin'] == 1:
+                    response = render(request,'Lab/insec_des/insec_des_lab.html', {"message":"Welcome Admin, SECRETKEY:ADMIN123"})
+                    return response
+            except (ValidationError, json.JSONDecodeError):
+                # Handle validation errors gracefully
+                # ...
 
         return response
     else:
         return redirect('login')
-
 #****************************************************XXE********************************************************#
 
 
@@ -248,21 +263,14 @@ def xxe_see(request):
 
 @csrf_exempt
 def xxe_parse(request):
-
-    parser = make_parser()
-    parser.setFeature(feature_external_ges, True)
-    doc = parseString(request.body.decode('utf-8'), parser=parser)
-    for event, node in doc:
-        if event == START_ELEMENT and node.tagName == 'text':
-            doc.expandNode(node)
-            text = node.toxml()
-    startInd = text.find('>')
-    endInd = text.find('<', startInd)
-    text = text[startInd + 1:endInd:]
+    from defusedxml.ElementTree import fromstring
+    xml_data = request.body.decode('utf-8')
+    doc = fromstring(xml_data)
+    text = ''
+    for node in doc.getElementsByTagName('text'):
+        text = node.firstChild.nodeValue if node.firstChild else ''
     p=comments.objects.filter(id=1).update(comment=text)
-
     return render(request, 'Lab/XXE/xxe_lab.html')
-
 def auth_home(request):
     return render(request,'Lab/AUTH/auth_home.html')
 
@@ -414,22 +422,18 @@ def cmd_lab(request):
             os=request.POST.get('os')
             print(os)
             if(os=='win'):
-                command="nslookup {}".format(domain)
+                command=["nslookup", domain]
             else:
-                command = "dig {}".format(domain)
+                command = ["dig", domain]
             
             try:
-                # output=subprocess.check_output(command,shell=True,encoding="UTF-8")
                 process = subprocess.Popen(
                     command,
-                    shell=True,
                     stdout=subprocess.PIPE, 
                     stderr=subprocess.PIPE)
                 stdout, stderr = process.communicate()
                 data = stdout.decode('utf-8')
                 stderr = stderr.decode('utf-8')
-                # res = json.loads(data)
-                # print("Stdout\n" + data)
                 output = data + stderr
                 print(data + stderr)
             except:
@@ -441,7 +445,6 @@ def cmd_lab(request):
             return render(request, 'Lab/CMD/cmd_lab.html')
     else:
         return redirect('login')
-
 @csrf_exempt
 def cmd_lab2(request):
     if request.user.is_authenticated:
@@ -450,7 +453,7 @@ def cmd_lab2(request):
             
             print(val)
             try:
-                output = eval(val)
+                output = json.loads(val)
             except:
                 output = "Something went wrong"
                 return render(request,'Lab/CMD/cmd_lab2.html',{"output":output})
@@ -460,7 +463,6 @@ def cmd_lab2(request):
             return render(request, 'Lab/CMD/cmd_lab2.html')
     else:
         return redirect('login')
-
 #******************************************Broken Authentication**************************************************#
 
 def bau(request):
