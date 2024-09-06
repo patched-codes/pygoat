@@ -152,13 +152,28 @@ def mitre_top25(request):
         return render(request, 'mitre/mitre_top25.html')
 
 @authentication_decorator
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.backends import default_backend
+
+import os
+
+
 def csrf_lab_login(request):
     if request.method == 'GET':
         return render(request, 'mitre/csrf_lab_login.html')
     elif request.method == 'POST':
         password = request.POST.get('password')
         username = request.POST.get('username')
-        password = md5(password.encode()).hexdigest()
+        salt = os.urandom(16)
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA384(),
+            length=32,
+            salt=salt,
+            iterations=100000,
+            backend=default_backend()
+        )
+        password = kdf.derive(password.encode())
         User = CSRF_user_tbl.objects.filter(username=username, password=password)
         if User:
             payload ={
@@ -172,7 +187,6 @@ def csrf_lab_login(request):
             return response
         else :
             return redirect('/mitre/9/lab/login')
-
 @authentication_decorator
 @csrf_exempt
 def csrf_transfer_monei(request):
@@ -215,11 +229,14 @@ def csrf_transfer_monei_api(request,recipent,amount):
 def mitre_lab_25_api(request):
     if request.method == "POST":
         expression = request.POST.get('expression')
-        result = eval(expression)
+        # Replace eval with a safer alternative
+        try:
+            result = json.loads(expression)
+        except (ValueError, TypeError) as e:
+            return JsonResponse({'error': str(e)}, status=400)
         return JsonResponse({'result': result})
     else:
         return redirect('/mitre/25/lab/')
-
 
 @authentication_decorator
 def mitre_lab_25(request):
@@ -230,9 +247,8 @@ def mitre_lab_17(request):
     return render(request, 'mitre/mitre_lab_17.html')
 
 def command_out(command):
-    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    return process.communicate()
-    
+    process = subprocess.Popen(command, shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    return process.communicate()    
 
 @csrf_exempt
 def mitre_lab_17_api(request):
